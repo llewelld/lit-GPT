@@ -11,7 +11,7 @@ ci:
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
+    rev: v5.0.0
     hooks:
       - id: end-of-file-fixer
         exclude: |
@@ -35,7 +35,7 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/asottile/pyupgrade
-    rev: v2.37.3
+    rev: v3.19.1
     hooks:
       - id: pyupgrade
         args: [--py36-plus]
@@ -47,7 +47,7 @@ repos:
           )
 
   - repo: https://github.com/myint/docformatter
-    rev: v1.5.0
+    rev: eb1df347edd128b30cd3368dddc3aa65edcfac38
     hooks:
       - id: docformatter
         args: [--in-place, --wrap-summaries=120, --wrap-descriptions=120]
@@ -58,7 +58,7 @@ repos:
           )
 
   - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
+    rev: 6.0.1
     hooks:
       - id: isort
         args: [--profile, black]
@@ -69,7 +69,7 @@ repos:
           )
 
   - repo: https://github.com/psf/black
-    rev: 22.6.0
+    rev: 25.1.0
     hooks:
       - id: black
         name: Black code
@@ -80,7 +80,7 @@ repos:
           )
 
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.15
+    rev: 0.7.22
     hooks:
       - id: mdformat
         additional_dependencies:
@@ -94,7 +94,7 @@ repos:
           )
 
   - repo: https://github.com/asottile/yesqa
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: yesqa
         exclude: |
@@ -104,7 +104,7 @@ repos:
           )
 
   - repo: https://github.com/PyCQA/flake8
-    rev: 4.0.1
+    rev: 7.2.0
     hooks:
       - id: flake8
         exclude: |

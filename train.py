@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
-from urllib.request import urlopen
 from typing import Union
+from urllib.request import urlopen
 
 import lightning as L
 import torch
@@ -10,7 +10,7 @@ from lightning_gpt import callbacks, data, models
 
 
 def none_or_str(value: str) -> Union[str, None]:
-    if value == 'None':
+    if value == "None":
         return None
     else:
         return value
