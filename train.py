@@ -1,11 +1,19 @@
 from argparse import ArgumentParser
 from urllib.request import urlopen
+from typing import Union
 
 import lightning as L
 import torch
 from torch.utils.data import DataLoader
 
 from lightning_gpt import callbacks, data, models
+
+
+def none_or_str(value: str) -> Union[str, None]:
+    if value == 'None':
+        return None
+    else:
+        return value
 
 
 def main(args):
@@ -104,7 +112,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser = L.Trainer.add_argparse_args(parser)
 
-    parser.add_argument("--model_type", default="gpt2", type=str)
+    parser.add_argument("--model_type", default="gpt2", type=none_or_str)
     parser.add_argument("--n_layer", type=int)
     parser.add_argument("--n_head", type=int)
     parser.add_argument("--n_embd", type=int)
