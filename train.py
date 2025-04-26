@@ -103,7 +103,8 @@ def main(args):
     context = "Friends of my soul"  # Prime with something
     x = train_dataset.to_tokens(context, model.device)
     y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
-    print(train_dataset.from_tokens(y))
+    # y is a list of length 1. That sole element is a tensor, hence y[0].
+    print(train_dataset.from_tokens(y[0]))
 
 
 if __name__ == "__main__":
