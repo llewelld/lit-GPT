@@ -84,7 +84,7 @@ class Bench(LightningWork):
             device_type = "cuda" if torch.cuda.is_available() else "cpu"
         torch.backends.cudnn.deterministic = True
         for i in range(num_runs):
-            print(f"Run {i+1}/{self.num_runs}")
+            print(f"Run {i + 1}/{self.num_runs}")
             gc.collect()
             if device_type == "cuda":
                 torch.cuda.empty_cache()

@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from typing import Union
 from urllib.request import urlopen
 
 import lightning as L
@@ -6,6 +7,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from lightning_gpt import callbacks, data, models
+
+
+def none_or_str(value: str) -> Union[str, None]:
+    if value == "None":
+        return None
+    else:
+        return value
 
 
 def main(args):
@@ -95,7 +103,8 @@ def main(args):
     context = "Friends of my soul"  # Prime with something
     x = train_dataset.to_tokens(context, model.device)
     y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
-    print(train_dataset.from_tokens(y))
+    # y is a list of length 1. That sole element is a tensor, hence y[0].
+    print(train_dataset.from_tokens(y[0]))
 
 
 if __name__ == "__main__":
@@ -104,7 +113,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser = L.Trainer.add_argparse_args(parser)
 
-    parser.add_argument("--model_type", default="gpt2", type=str)
+    parser.add_argument("--model_type", default="gpt2", type=none_or_str)
     parser.add_argument("--n_layer", type=int)
     parser.add_argument("--n_head", type=int)
     parser.add_argument("--n_embd", type=int)

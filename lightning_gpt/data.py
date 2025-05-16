@@ -8,8 +8,8 @@ from torch.utils.data import Dataset
 
 
 class CharDataset(Dataset):
-    def __init__(self, data: str, block_size: int):
-        chars = list(set(data))
+    def __init__(self, data: bytes, block_size: int):
+        chars = sorted(set(data))
         data_size, vocab_size = len(data), len(chars)
         rank_zero_info("data has %d characters, %d unique." % (data_size, vocab_size))
 
@@ -32,7 +32,7 @@ class CharDataset(Dataset):
         return x, y
 
     def to_tokens(self, message: str, device: Union[str, torch.device]) -> torch.Tensor:
-        return torch.tensor([self.stoi[s] for s in message], dtype=torch.long)[None, ...].to(device)
+        return torch.tensor([self.stoi[ord(s)] for s in message], dtype=torch.long)[None, ...].to(device)
 
     def from_tokens(self, tokens: torch.Tensor) -> str:
-        return "".join([self.itos[int(i)] for i in tokens])
+        return "".join(chr(self.itos[int(i)]) for i in tokens)
