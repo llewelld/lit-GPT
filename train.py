@@ -117,7 +117,7 @@ def main(args):
         args,
         gradient_clip_val=1.0,
         callbacks=callback_list,
-        strategy="ddp",
+        # strategy="ddp",
         enable_checkpointing=False,
     )
 
