@@ -5,7 +5,10 @@ def xpu_setup_environment():
     # MPI_LOCALRANKID
     # Local sequential index of the process on the node
     # See nowhere
-    local_rank = int(os.environ["MPI_LOCALRANKID"])
+    try:
+        local_rank = int(os.environ["MPI_LOCALRANKID"])
+    except KeyError:
+        local_rank = int(os.environ["SLURM_PROCID"])
 
     # PMI_RANK
     # The rank of this process within the program (zero-origin)
@@ -97,6 +100,7 @@ class XPUAccelerator(Accelerator):
     @staticmethod
     def parse_devices(devices: Union[int, str, List[int]]) -> Optional[List[int]]:
         # Put parsing logic here how devices can be passed into the Trainer
+        print(f'devices passed: {devices}')
         # via the `devices` argument
         xpus = devices
         _check_data_type(xpus)
@@ -121,14 +125,21 @@ class XPUAccelerator(Accelerator):
         else:
             xpus = list(range(xpus))
 
+        print(f'xpus set: {xpus}')
+        print(f'xpus available: {available_xpus}')
+
         if not xpus:
             raise MisconfigurationException("xpus requested but none are available.")
 
+        
         for gpu in xpus:
             if gpu not in available_xpus:
-                raise MisconfigurationException(
-                    f"You requested gpu: {xpus}\n But your machine only has: {available_xpus}"
-                )
+                print(
+                        f"You requested gpu: {xpus}\n But your machine only has: {available_xpus}"
+                        )
+                # raise MisconfigurationException(
+                #     f"You requested gpu: {xpus}\n But your machine only has: {available_xpus}"
+                # )
 
         return xpus
 
