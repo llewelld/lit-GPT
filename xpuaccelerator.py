@@ -38,16 +38,15 @@ def xpu_setup_environment():
 xpu_setup_environment()
 
 import torch
-import torchvision
 import intel_extension_for_pytorch as ipex
-from typing import Any, MutableSequence, Tuple, Union, Dict, Optional, List
+from typing import Any, MutableSequence, Union, Dict, Optional, List
 
 import lightning as L
 from lightning.pytorch.accelerators.accelerator import Accelerator
 from lightning.fabric.utilities.exceptions import MisconfigurationException
 from lightning.fabric.utilities.device_parser import _check_data_type
 from lightning.pytorch.utilities import rank_zero_info
-from lightning.pytorch.strategies import DDPStrategy
+from lightning.pytorch.strategies import DDPStrategy, FSDPStrategy
 from lightning.pytorch.plugins import MixedPrecisionPlugin
 
 # Custom XPU Trainer class
@@ -69,12 +68,18 @@ class Trainer(L.Trainer):
             ipex.set_fp32_math_mode(mode=ipex.FP32MathMode.FP32, device='xpu')
 
         strategy = kwargs.get("strategy") or vars(args[0]).get("strategy")
+        accelerator = XPUAccelerator()
         if strategy == "ddp":
             # For ddp we need to configure Lightning to use the XPU and CCL backed
-            accelerator = XPUAccelerator()
+            # accelerator = XPUAccelerator()
             ddp = DDPStrategy(accelerator=accelerator, process_group_backend="ccl")
             kwargs['strategy'] = ddp
         # Return a standard Lightning Trainer but using our adjusted configuration
+        elif strategy == "fsdp_native":
+            fsdp = FSDPStrategy(accelerator=accelerator, process_group_backend="ccl")
+            kwargs['strategy'] = fsdp
+        else:
+            raise MisconfigurationException(f"'{strategy}' is not valid, only 'ddp' and 'fsdp_native' are supported")
         return L.Trainer.from_argparse_args(*args, **kwargs)
 
 # Custom XPU Accelerator class
