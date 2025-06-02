@@ -46,7 +46,7 @@ from lightning.pytorch.accelerators.accelerator import Accelerator
 from lightning.fabric.utilities.exceptions import MisconfigurationException
 from lightning.fabric.utilities.device_parser import _check_data_type
 from lightning.pytorch.utilities import rank_zero_info
-from lightning.pytorch.strategies import DDPStrategy, FSDPStrategy
+from lightning.pytorch.strategies import DDPStrategy, DDPFullyShardedNativeStrategy
 from lightning.pytorch.plugins import MixedPrecisionPlugin
 
 # Custom XPU Trainer class
@@ -76,7 +76,7 @@ class Trainer(L.Trainer):
             kwargs['strategy'] = ddp
         # Return a standard Lightning Trainer but using our adjusted configuration
         elif strategy == "fsdp_native":
-            fsdp = FSDPStrategy(accelerator=accelerator, process_group_backend="ccl")
+            fsdp = DDPFullyShardedNativeStrategy(accelerator=accelerator, process_group_backend="ccl")
             kwargs['strategy'] = fsdp
         else:
             raise MisconfigurationException(f"'{strategy}' is not valid, only 'ddp' and 'fsdp_native' are supported")
