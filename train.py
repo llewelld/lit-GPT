@@ -88,14 +88,18 @@ def main(args):
         torch.set_float32_matmul_precision("high")
         callback_list.append(callbacks.CUDAMetricsCallback())
 
-    trainer = L.Trainer.from_argparse_args(
-        args,
-        max_epochs=10,
-        gradient_clip_val=1.0,
+    trainer = L.Trainer(
+        # args,
+        accelerator=args.accelerator,
+        strategy=args.strategy,
+        devices=args.devices,
+        num_nodes=args.num_nodes,
+        precision=args.precision,
         callbacks=callback_list,
-        accelerator="auto",
-        devices="auto",
-        precision=16,
+        max_epochs=args.max_epochs,
+        gradient_clip_val=args.gradient_clip_val,
+        gradient_clip_algorithm=args.gradient_clip_algorithm,
+        enable_progress_bar=args.enable_progress_bar,
     )
 
     trainer.fit(model, train_loader)
@@ -111,18 +115,27 @@ if __name__ == "__main__":
     L.seed_everything(42)
 
     parser = ArgumentParser()
-    parser = L.Trainer.add_argparse_args(parser)
+    # parser = L.Trainer.add_argparse_args(parser)
 
-    parser.add_argument("--model_type", default="gpt2", type=none_or_str)
-    parser.add_argument("--n_layer", type=int)
-    parser.add_argument("--n_head", type=int)
-    parser.add_argument("--n_embd", type=int)
-    parser.add_argument("--learning_rate", default=3e-4, type=float)
-    parser.add_argument("--block_size", default=128, type=int)
-    parser.add_argument("--batch_size", default=64, type=int)
-    parser.add_argument("--num_workers", default=4, type=int)
+    parser.add_argument("--model-type", default="gpt2", type=none_or_str)
+    parser.add_argument("--n-layer", type=int)
+    parser.add_argument("--n-head", type=int)
+    parser.add_argument("--n-embd", type=int)
+    parser.add_argument("--learning-rate", default=3e-4, type=float)
+    parser.add_argument("--block-size", default=128, type=int)
+    parser.add_argument("--batch-size", default=64, type=int)
+    parser.add_argument("--num-workers", default=4, type=int)
     parser.add_argument("--compile", default=None, choices=[None, "dynamo"])
     parser.add_argument("--implementation", default="mingpt", choices=["mingpt", "nanogpt"])
+    parser.add_argument("--strategy", default="ddp", choices=["fsdp"])
+    parser.add_argument("--max-epochs", default=10)
+    parser.add_argument("--gradient-clip-val", default=1.0)
+    parser.add_argument("--gradient-clip-algorithm", default="norm", choices=("norm", "value"))
+    parser.add_argument("--devices", default=1, type=int)
+    parser.add_argument("--precision", default=16, type=int)
+    parser.add_argument("--num-nodes", default=1, type=int)
+    parser.add_argument("--enable-progress-bar", default=True, type=bool)
+    parser.add_argument("--accelerator", default="auto")
     args = parser.parse_args()
 
     main(args)
