@@ -22,7 +22,9 @@ def main(args):
 
     train_dataset = data.CharDataset(text, args.block_size)
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers)
+    train_loader = DataLoader(
+        train_dataset, batch_size=args.batch_size, num_workers=args.num_workers, persistent_workers=True
+    )
 
     GPT_class = None
     extra_kwargs = {}
