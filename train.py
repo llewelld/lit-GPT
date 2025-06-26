@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from typing import Union
 from urllib.request import urlopen
+from urllib.error import URLError
 
 import lightning as L
 import torch
@@ -8,6 +9,8 @@ from torch.utils.data import DataLoader
 
 from lightning_gpt import callbacks, data, models
 
+
+LOCAL_SHAKESPEAR_PATH = "shakespeare_input.txt"
 
 def none_or_str(value: str) -> Union[str, None]:
     if value == "None":
@@ -17,8 +20,12 @@ def none_or_str(value: str) -> Union[str, None]:
 
 
 def main(args):
-    with urlopen("https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt") as f:
-        text = f.read()
+    try:
+        with urlopen("https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt") as f:
+            text = f.read()
+    except URLError:
+        with open(LOCAL_SHAKESPEAR_PATH) as f:
+            text = f.read()
 
     train_dataset = data.CharDataset(text, args.block_size)
 
@@ -55,7 +62,7 @@ def main(args):
             raise ValueError(f"Implementation {args.implementation} not supported with DeepSpeed")
         extra_kwargs["offload"] = False
 
-    elif args.strategy == "fsdp_native":
+    elif args.strategy == "fsdp":
         if GPT_class == models.MinGPT:
             GPT_class = models.FSDPMinGPT
         elif GPT_class == models.NanoGPT:
