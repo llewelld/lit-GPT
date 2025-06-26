@@ -55,7 +55,7 @@ def main(args):
             raise ValueError(f"Implementation {args.implementation} not supported with DeepSpeed")
         extra_kwargs["offload"] = False
 
-    elif args.strategy == "fsdp_native":
+    elif args.strategy == "fsdp":
         if GPT_class == models.MinGPT:
             GPT_class = models.FSDPMinGPT
         elif GPT_class == models.NanoGPT:
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", default=4, type=int)
     parser.add_argument("--compile", default=None, choices=[None, "dynamo"])
     parser.add_argument("--implementation", default="mingpt", choices=["mingpt", "nanogpt"])
-    parser.add_argument("--strategy", default="ddp", choices=["fsdp"])
+    parser.add_argument("--strategy", default="ddp", choices=["fsdp", "ddp"])
     parser.add_argument("--max-epochs", default=10)
     parser.add_argument("--gradient-clip-val", default=1.0)
     parser.add_argument("--gradient-clip-algorithm", default="norm", choices=("norm", "value"))
