@@ -101,7 +101,11 @@ def main(args):
         torch.set_float32_matmul_precision("high")
         callback_list.append(callbacks.CUDAMetricsCallback())
 
-    # if args.accelerator == "xpu":
+    if args.accelerator == "xpu":
+        args.strategy = "single_xpu"
+        # strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
+        # strategy.accelerator = "xpu"
+        # args.strategy = strategy
 
     trainer = L.Trainer(
         # args,
