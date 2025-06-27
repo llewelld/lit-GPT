@@ -8,9 +8,8 @@ import torch
 from lightning.pytorch.accelerators import AcceleratorRegistry
 from torch.utils.data import DataLoader
 
+from intel_backend import XPUAccelerator
 from lightning_gpt import callbacks, data, models
-
-from .intel_backend import XPUAccelerator
 
 AcceleratorRegistry.register("xpu", XPUAccelerator)
 
@@ -151,7 +150,7 @@ if __name__ == "__main__":
     parser.add_argument("--precision", default=16, type=int)
     parser.add_argument("--num-nodes", default=1, type=int)
     parser.add_argument("--enable-progress-bar", default=True, type=bool)
-    parser.add_argument("--accelerator", default="auto", choices=("auto", "xpu"))
+    parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
     args = parser.parse_args()
 
     main(args)
