@@ -1,16 +1,21 @@
 from argparse import ArgumentParser
 from typing import Union
-from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.request import urlopen
 
 import lightning as L
 import torch
+from lightning.pytorch.accelerators import AcceleratorRegistry
 from torch.utils.data import DataLoader
 
 from lightning_gpt import callbacks, data, models
 
+from .intel_backend import XPUAccelerator
+
+AcceleratorRegistry.register("xpu", XPUAccelerator)
 
 LOCAL_SHAKESPEAR_PATH = "shakespeare_input.txt"
+
 
 def none_or_str(value: str) -> Union[str, None]:
     if value == "None":
@@ -97,6 +102,8 @@ def main(args):
         torch.set_float32_matmul_precision("high")
         callback_list.append(callbacks.CUDAMetricsCallback())
 
+    # if args.accelerator == "xpu":
+
     trainer = L.Trainer(
         # args,
         accelerator=args.accelerator,
@@ -144,7 +151,7 @@ if __name__ == "__main__":
     parser.add_argument("--precision", default=16, type=int)
     parser.add_argument("--num-nodes", default=1, type=int)
     parser.add_argument("--enable-progress-bar", default=True, type=bool)
-    parser.add_argument("--accelerator", default="auto")
+    parser.add_argument("--accelerator", default="auto", choices=("auto", "xpu"))
     args = parser.parse_args()
 
     main(args)
