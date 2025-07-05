@@ -1,4 +1,4 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from typing import Union
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from intel_backend import XPUAccelerator
 from lightning_gpt import callbacks, data, models
+from lightning.pytorch.strategies import SingleDeviceStrategy, StrategyRegistry, DDPStrategy, FSDPStrategy
 
 AcceleratorRegistry.register("xpu", XPUAccelerator)
 
@@ -102,9 +103,16 @@ def main(args):
         callback_list.append(callbacks.CUDAMetricsCallback())
 
     if args.accelerator == "xpu":
-        args.strategy = "single_xpu"
-        # strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
-        # strategy.accelerator = "xpu"
+        # args.strategy = "single_xpu"
+        # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
+        if args.strategy == "ddp":
+            # args.strategy = DDPStrategy(device="xpu", accelerator=XPUAccelerator())
+            args.strategy = "ddp_xpu"
+        elif args.strategy == "fsdp":
+            args.strategy = FSDPStrategy(device="xpu", accelerator=XPUAccelerator())
+        else:
+            raise ValueError(f"{args.strategy} is not supported for xpu")
+        # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
         # args.strategy = strategy
 
     trainer = L.Trainer(
@@ -118,7 +126,7 @@ def main(args):
         max_epochs=args.max_epochs,
         gradient_clip_val=args.gradient_clip_val,
         gradient_clip_algorithm=args.gradient_clip_algorithm,
-        enable_progress_bar=args.enable_progress_bar,
+        enable_progress_bar=args.progress_bar,
     )
 
     trainer.fit(model, train_loader)
@@ -147,13 +155,13 @@ if __name__ == "__main__":
     parser.add_argument("--compile", default=None, choices=[None, "dynamo"])
     parser.add_argument("--implementation", default="mingpt", choices=["mingpt", "nanogpt"])
     parser.add_argument("--strategy", default="ddp", choices=["fsdp", "ddp"])
-    parser.add_argument("--max-epochs", default=10)
-    parser.add_argument("--gradient-clip-val", default=1.0)
+    parser.add_argument("--max-epochs", default=10, type=int)
+    parser.add_argument("--gradient-clip-val", default=1.0, type=float)
     parser.add_argument("--gradient-clip-algorithm", default="norm", choices=("norm", "value"))
     parser.add_argument("--devices", default=1, type=int)
-    parser.add_argument("--precision", default=16, type=int)
+    parser.add_argument("--precision", default=16, type=str)
     parser.add_argument("--num-nodes", default=1, type=int)
-    parser.add_argument("--enable-progress-bar", default=True, type=bool)
+    parser.add_argument("--progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
     args = parser.parse_args()
 

@@ -6,14 +6,21 @@ from datetime import timedelta
 from logging import getLogger
 from typing import Any
 
+from typing_extensions import override
 import torch
 from lightning.pytorch.accelerators import Accelerator
 from lightning.pytorch.strategies import SingleDeviceStrategy, StrategyRegistry
+from lightning.pytorch.strategies import SingleDeviceStrategy, StrategyRegistry, DDPStrategy, FSDPStrategy
 from torch import distributed as dist
+from torch.nn.parallel.distributed import DistributedDataParallel
+from lightning.pytorch.overrides.distributed import _register_ddp_comm_hook
+import intel_extension_for_pytorch as ipex
+import oneccl_bindings_for_pytorch
+
 
 default_pg_timeout = timedelta(seconds=1800)
 
-logger = getLogger(__file__)
+log = getLogger(__file__)
 
 
 class XPUAccelerator(Accelerator):
@@ -109,6 +116,51 @@ class XPUAccelerator(Accelerator):
 # add PVC to the registry
 # AcceleratorRegistry.register("xpu", XPUAccelerator)
 
+class DDPXPUStrategy(DDPStrategy):
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(
+            # device=device,
+            # accelerator=XPUAccelerator(),
+            # checkpoint_io=checkpoint_io,
+            # precision_plugin=precision_plugin,
+            process_group_backend="ccl",
+            **kwargs
+        )
+        # super(process_group_backend="ccl", **kwargs)
+
+    @override
+    def _setup_model(self, model: Module) -> DistributedDataParallel:
+        """Wraps the model into a `DistributedDataParallel` module."""
+        device_ids = self.determine_ddp_device_ids()
+        log.debug(f"setting up DDP model with device ids: {device_ids}, kwargs: {self._ddp_kwargs}")
+        if self.root_device.type == "xpu":
+            # https://pytorch.org/docs/stable/notes/cuda.html#id5
+            ctx = torch.xpu.stream(torch.xpu.Stream()) if device_ids is not None else nullcontext()
+        # elif self.root_device.type == "cuda":
+        #     ctx = torch.cuda.stream(torch.cuda.Stream()) if device_ids is not None else nullcontext()
+        else:
+           raise ValueError("Only 'cuda' and 'xpu' are supported")
+        with ctx:
+            return DistributedDataParallel(module=model, device_ids=device_ids, **self._ddp_kwargs)
+
+
+    def _register_ddp_hooks(self) -> None:
+        log.debug(f"{self.__class__.__name__}: registering ddp hooks")
+        # currently, DDP communication hooks only work with NCCL backend and SPSD (single process single device) mode
+        # https://github.com/pytorch/pytorch/blob/v1.8.0/torch/nn/parallel/distributed.py#L1080-L1084
+        # if self.root_device.type in ("cuda", "xpu"):
+        if self.root_device.type == "xpu":
+            assert isinstance(self.model, DistributedDataParallel)
+            _register_ddp_comm_hook(
+                model=self.model,
+                ddp_comm_state=self._ddp_comm_state,
+                ddp_comm_hook=self._ddp_comm_hook,
+                ddp_comm_wrapper=self._ddp_comm_wrapper,
+            )
+        else:
+            raise ValueError("Only 'cuda' and 'xpu' are supported")
+
 
 class SingleXPUStrategy(SingleDeviceStrategy):
     """This class implements the strategy for using a single PVC tile."""
@@ -128,19 +180,19 @@ class SingleXPUStrategy(SingleDeviceStrategy):
             precision_plugin=precision_plugin,
         )
 
-    @property
-    def is_distributed(self) -> bool:
-        return False
+    # @property
+    # def is_distributed(self) -> bool:
+    #     return False
 
-    def setup(self, trainer) -> None:
-        self.model_to_device()
-        super().setup(trainer)
+    # def setup(self, trainer) -> None:
+    #     self.model_to_device()
+    #     super().setup(trainer)
 
-    def setup_optimizers(self, trainer) -> None:
-        super().setup_optimizers(trainer)
+    # def setup_optimizers(self, trainer) -> None:
+    #     super().setup_optimizers(trainer)
 
-    def model_to_device(self) -> None:
-        self.model.to(self.root_device)
+    # def model_to_device(self) -> None:
+    #     self.model.to(self.root_device)
 
     @classmethod
     def register_strategies(cls, strategy_registry) -> None:
@@ -155,4 +207,10 @@ StrategyRegistry.register(
     "single_xpu",
     SingleXPUStrategy,
     description="Strategy utilizing a single Intel GPU device or tile.",
+)
+
+StrategyRegistry.register(
+    "ddp_xpu",
+    DDPXPUStrategy,
+    description="XPU utilizing a multiple Intel or CUDA GPU device or tile.",
 )
