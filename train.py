@@ -6,11 +6,11 @@ from urllib.request import urlopen
 import lightning as L
 import torch
 from lightning.pytorch.accelerators import AcceleratorRegistry
+from lightning.pytorch.strategies import FSDPStrategy
 from torch.utils.data import DataLoader
 
 from intel_backend import XPUAccelerator
 from lightning_gpt import callbacks, data, models
-from lightning.pytorch.strategies import SingleDeviceStrategy, StrategyRegistry, DDPStrategy, FSDPStrategy
 
 AcceleratorRegistry.register("xpu", XPUAccelerator)
 
@@ -105,6 +105,10 @@ def main(args):
     if args.accelerator == "xpu":
         # args.strategy = "single_xpu"
         # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
+        if torch.xpu.is_available():
+            # torch.set_float32_matmul_precision("high")
+            torch.set_float32_matmul_precision("high")
+            callback_list.append(callbacks.XPUMetricsCallback())
         if args.strategy == "ddp":
             # args.strategy = DDPStrategy(device="xpu", accelerator=XPUAccelerator())
             args.strategy = "ddp_xpu"
