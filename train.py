@@ -9,7 +9,7 @@ from lightning.pytorch.accelerators import AcceleratorRegistry
 from lightning.pytorch.strategies import FSDPStrategy
 from torch.utils.data import DataLoader
 
-from intel_backend import XPUAccelerator
+from intel_backend import XPUAccelerator, ipex
 from lightning_gpt import callbacks, data, models
 
 AcceleratorRegistry.register("xpu", XPUAccelerator)
@@ -107,6 +107,7 @@ def main(args):
         # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
         if torch.xpu.is_available():
             # torch.set_float32_matmul_precision("high")
+            ipex.set_fp32_math_mode(mode=ipex.FP32MathMode.FP32, device="xpu")
             torch.set_float32_matmul_precision("high")
             callback_list.append(callbacks.XPUMetricsCallback())
         if args.strategy == "ddp":
