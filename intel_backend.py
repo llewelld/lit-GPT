@@ -2,21 +2,30 @@
 # SPDX-License-Identifier: MIT License
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import timedelta
 from logging import getLogger
 from typing import Any
 
-from typing_extensions import override
+# import intel_extension_for_pytorch as ipex
+# import oneccl_bindings_for_pytorch
 import torch
+from lightning.fabric.utilities.distributed import (
+    _init_dist_connection,
+)
+from lightning.fabric.utilities.seed import reset_seed
 from lightning.pytorch.accelerators import Accelerator
-from lightning.pytorch.strategies import SingleDeviceStrategy, StrategyRegistry
-from lightning.pytorch.strategies import SingleDeviceStrategy, StrategyRegistry, DDPStrategy, FSDPStrategy
-from torch import distributed as dist
-from torch.nn.parallel.distributed import DistributedDataParallel
 from lightning.pytorch.overrides.distributed import _register_ddp_comm_hook
-import intel_extension_for_pytorch as ipex
-import oneccl_bindings_for_pytorch
-
+from lightning.pytorch.strategies import (
+    DDPStrategy,
+    FSDPStrategy,
+    SingleDeviceStrategy,
+    StrategyRegistry,
+)
+from torch import distributed as dist
+from torch.nn import Module
+from torch.nn.parallel.distributed import DistributedDataParallel
+from typing_extensions import override
 
 default_pg_timeout = timedelta(seconds=1800)
 
@@ -116,6 +125,7 @@ class XPUAccelerator(Accelerator):
 # add PVC to the registry
 # AcceleratorRegistry.register("xpu", XPUAccelerator)
 
+
 class DDPXPUStrategy(DDPStrategy):
 
     def __init__(self, **kwargs) -> None:
@@ -125,7 +135,7 @@ class DDPXPUStrategy(DDPStrategy):
             # checkpoint_io=checkpoint_io,
             # precision_plugin=precision_plugin,
             process_group_backend="ccl",
-            **kwargs
+            **kwargs,
         )
         # super(process_group_backend="ccl", **kwargs)
 
@@ -140,10 +150,9 @@ class DDPXPUStrategy(DDPStrategy):
         # elif self.root_device.type == "cuda":
         #     ctx = torch.cuda.stream(torch.cuda.Stream()) if device_ids is not None else nullcontext()
         else:
-           raise ValueError("Only 'cuda' and 'xpu' are supported")
+            raise ValueError("Only 'xpu' are supported")
         with ctx:
             return DistributedDataParallel(module=model, device_ids=device_ids, **self._ddp_kwargs)
-
 
     def _register_ddp_hooks(self) -> None:
         log.debug(f"{self.__class__.__name__}: registering ddp hooks")
@@ -160,6 +169,71 @@ class DDPXPUStrategy(DDPStrategy):
             )
         else:
             raise ValueError("Only 'cuda' and 'xpu' are supported")
+
+
+class FSDPXPUStrategy(FSDPStrategy):
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(
+            # device=device,
+            # accelerator=XPUAccelerator(),
+            # checkpoint_io=checkpoint_io,
+            # precision_plugin=precision_plugin,
+            process_group_backend="ccl",
+            **kwargs,
+        )
+        # super(process_group_backend="ccl", **kwargs)
+
+    @override
+    def setup_environment(self) -> None:
+        super().setup_environment()
+        log.debug(f"{self.__class__.__name__}: setting up distributed...")
+        reset_seed()
+
+        # determine which process we are and world size
+        self.set_world_ranks()
+
+        self._process_group_backend = self._get_process_group_backend()
+        assert self.cluster_environment is not None
+        _init_dist_connection(self.cluster_environment, self._process_group_backend, timeout=self._timeout)
+
+        # if 'device_mesh' in the `kwargs` is provided as a tuple, update it into the `DeviceMesh` object here
+        if isinstance(self.kwargs.get("device_mesh"), tuple):
+            from torch.distributed.device_mesh import init_device_mesh
+
+            self.kwargs["device_mesh"] = init_device_mesh("xpu", self.kwargs["device_mesh"])
+
+    # @override
+    # def _setup_model(self, model: Module) -> DistributedDataParallel:
+    #     """Wraps the model into a `DistributedDataParallel` module."""
+    #     device_ids = self.determine_ddp_device_ids()
+    #     log.debug(f"setting up FSDP model with device ids: {device_ids}, kwargs: {self._ddp_kwargs}")
+    #     if self.root_device.type == "xpu":
+    #         # https://pytorch.org/docs/stable/notes/cuda.html#id5
+    #         ctx = torch.xpu.stream(torch.xpu.Stream()) if device_ids is not None else nullcontext()
+    #     # elif self.root_device.type == "cuda":
+    #     #     ctx = torch.cuda.stream(torch.cuda.Stream()) if device_ids is not None else nullcontext()
+    #     else:
+    #        raise ValueError("Only 'xpu' are supported")
+    #     with ctx:
+    #         return DistributedDataParallel(module=model, device_ids=device_ids, **self._ddp_kwargs)
+    #
+    #
+    # def _register_ddp_hooks(self) -> None:
+    #     log.debug(f"{self.__class__.__name__}: registering fsdp hooks")
+    #     # currently, DDP communication hooks only work with NCCL backend and SPSD (single process single device) mode
+    #     # https://github.com/pytorch/pytorch/blob/v1.8.0/torch/nn/parallel/distributed.py#L1080-L1084
+    #     # if self.root_device.type in ("cuda", "xpu"):
+    #     if self.root_device.type == "xpu":
+    #         assert isinstance(self.model, DistributedDataParallel)
+    #         _register_ddp_comm_hook(
+    #             model=self.model,
+    #             ddp_comm_state=self._ddp_comm_state,
+    #             ddp_comm_hook=self._ddp_comm_hook,
+    #             ddp_comm_wrapper=self._ddp_comm_wrapper,
+    #         )
+    #     else:
+    #         raise ValueError("Only 'cuda' and 'xpu' are supported")
 
 
 class SingleXPUStrategy(SingleDeviceStrategy):
@@ -212,5 +286,11 @@ StrategyRegistry.register(
 StrategyRegistry.register(
     "ddp_xpu",
     DDPXPUStrategy,
-    description="XPU utilizing a multiple Intel or CUDA GPU device or tile.",
+    description="XPU ddp utilizing a multiple Intel or CUDA GPU device or tile.",
+)
+
+StrategyRegistry.register(
+    "fsdp_xpu",
+    DDPXPUStrategy,
+    description="XPU fsdp utilizing a multiple Intel or CUDA GPU device or tile.",
 )

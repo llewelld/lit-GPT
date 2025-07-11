@@ -6,7 +6,6 @@ from urllib.request import urlopen
 import lightning as L
 import torch
 from lightning.pytorch.accelerators import AcceleratorRegistry
-from lightning.pytorch.strategies import FSDPStrategy
 from torch.utils.data import DataLoader
 
 from intel_backend import XPUAccelerator, ipex
@@ -114,7 +113,8 @@ def main(args):
             # args.strategy = DDPStrategy(device="xpu", accelerator=XPUAccelerator())
             args.strategy = "ddp_xpu"
         elif args.strategy == "fsdp":
-            args.strategy = FSDPStrategy(device="xpu", accelerator=XPUAccelerator())
+            # args.strategy = FSDPStrategy(device="xpu", accelerator=XPUAccelerator())
+            args.strategy = "fsdp_xpu"
         else:
             raise ValueError(f"{args.strategy} is not supported for xpu")
         # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
