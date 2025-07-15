@@ -114,6 +114,7 @@ def main(args):
             args.strategy = "ddp_xpu"
         elif args.strategy == "fsdp":
             # args.strategy = FSDPStrategy(device="xpu", accelerator=XPUAccelerator())
+            print("Applying 'fsdp_xpu' stragey")
             args.strategy = "fsdp_xpu"
         else:
             raise ValueError(f"{args.strategy} is not supported for xpu")

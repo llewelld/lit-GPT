@@ -7,8 +7,8 @@ from datetime import timedelta
 from logging import getLogger
 from typing import Any
 
-# import intel_extension_for_pytorch as ipex
-# import oneccl_bindings_for_pytorch
+import intel_extension_for_pytorch as ipex
+import oneccl_bindings_for_pytorch
 import torch
 from lightning.fabric.utilities.distributed import (
     _init_dist_connection,
@@ -182,11 +182,13 @@ class FSDPXPUStrategy(FSDPStrategy):
             process_group_backend="ccl",
             **kwargs,
         )
+        print("Using FSDPXPUStrategy!")
         # super(process_group_backend="ccl", **kwargs)
 
     @override
     def setup_environment(self) -> None:
         super().setup_environment()
+        log.warning("USING FSDP XPU")
         log.debug(f"{self.__class__.__name__}: setting up distributed...")
         reset_seed()
 
@@ -291,6 +293,6 @@ StrategyRegistry.register(
 
 StrategyRegistry.register(
     "fsdp_xpu",
-    DDPXPUStrategy,
+    FSDPXPUStrategy,
     description="XPU fsdp utilizing a multiple Intel or CUDA GPU device or tile.",
 )
