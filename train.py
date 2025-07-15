@@ -1,7 +1,8 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 from typing import Union
 from urllib.request import urlopen
 from urllib.error import URLError
+from pathlib import Path
 
 import lightning as L
 import torch
@@ -10,7 +11,7 @@ from torch.utils.data import DataLoader
 from lightning_gpt import callbacks, data, models
 
 
-LOCAL_SHAKESPEAR_PATH = "shakespeare_input.txt"
+LOCAL_SHAKESPEARE_PATH: Path = Path("shakespeare_input.txt")
 
 def none_or_str(value: str) -> Union[str, None]:
     if value == "None":
@@ -24,7 +25,8 @@ def main(args):
         with urlopen("https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt") as f:
             text = f.read()
     except URLError:
-        with open(LOCAL_SHAKESPEAR_PATH) as f:
+        # Open in binary mode for compatibility
+        with args.local_shakespeare_path.open(mode="rb") as f:
             text = f.read()
 
     train_dataset = data.CharDataset(text, args.block_size)
@@ -98,7 +100,6 @@ def main(args):
         callback_list.append(callbacks.CUDAMetricsCallback())
 
     trainer = L.Trainer(
-        # args,
         accelerator=args.accelerator,
         strategy=args.strategy,
         devices=args.devices,
@@ -137,14 +138,15 @@ if __name__ == "__main__":
     parser.add_argument("--compile", default=None, choices=[None, "dynamo"])
     parser.add_argument("--implementation", default="mingpt", choices=["mingpt", "nanogpt"])
     parser.add_argument("--strategy", default="ddp", choices=["fsdp", "ddp"])
-    parser.add_argument("--max-epochs", default=10)
-    parser.add_argument("--gradient-clip-val", default=1.0)
+    parser.add_argument("--max-epochs", default=10, type=int)
+    parser.add_argument("--gradient-clip-val", default=1.0, type=float)
     parser.add_argument("--gradient-clip-algorithm", default="norm", choices=("norm", "value"))
     parser.add_argument("--devices", default=1, type=int)
     parser.add_argument("--precision", default=16, type=int)
     parser.add_argument("--num-nodes", default=1, type=int)
-    parser.add_argument("--enable-progress-bar", default=True, type=bool)
+    parser.add_argument("--enable-progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto")
+    parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
     args = parser.parse_args()
 
     main(args)
