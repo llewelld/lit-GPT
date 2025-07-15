@@ -7,8 +7,6 @@ from datetime import timedelta
 from logging import getLogger
 from typing import Any
 
-import intel_extension_for_pytorch as ipex
-import oneccl_bindings_for_pytorch
 import torch
 from lightning.fabric.utilities.distributed import (
     _init_dist_connection,
@@ -30,6 +28,13 @@ from typing_extensions import override
 default_pg_timeout = timedelta(seconds=1800)
 
 log = getLogger(__file__)
+
+# try:
+#     import intel_extension_for_pytorch as ipex
+#     import oneccl_bindings_for_pytorch
+# except ModuleNotFoundError:
+#     log.debug("'intel_extension_for_pytorch' and/or 'oneccl_bindings_for_pytorch' not installed")
+#
 
 
 class XPUAccelerator(Accelerator):
