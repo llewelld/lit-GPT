@@ -1,4 +1,5 @@
 from argparse import ArgumentParser, BooleanOptionalAction
+from logging import getLogger
 from typing import Union
 from urllib.error import URLError
 from pathlib import Path
@@ -9,8 +10,18 @@ import torch
 from lightning.pytorch.accelerators import AcceleratorRegistry
 from torch.utils.data import DataLoader
 
-from intel_backend import XPUAccelerator, ipex
 from lightning_gpt import callbacks, data, models
+
+log = getLogger(__file__)
+
+try:
+    import intel_extension_for_pytorch as ipex
+    import oneccl_bindings_for_pytorch  # noqa: F401
+
+    from intel_backend import XPUAccelerator
+except ImportError:
+    log.info("'intel_extension_for_pytorch' and/or 'oneccl_bindings_for_pytorch' not installed")
+
 
 AcceleratorRegistry.register("xpu", XPUAccelerator)
 
@@ -102,26 +113,21 @@ def main(args):
     if torch.cuda.is_available():
         torch.set_float32_matmul_precision("high")
         callback_list.append(callbacks.CUDAMetricsCallback())
-
-    if args.accelerator == "xpu":
-        # args.strategy = "single_xpu"
-        # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
+    elif args.accelerator == "xpu":
         if torch.xpu.is_available():
             # torch.set_float32_matmul_precision("high")
             ipex.set_fp32_math_mode(mode=ipex.FP32MathMode.FP32, device="xpu")
             torch.set_float32_matmul_precision("high")
             callback_list.append(callbacks.XPUMetricsCallback())
         if args.strategy == "ddp":
-            # args.strategy = DDPStrategy(device="xpu", accelerator=XPUAccelerator())
             args.strategy = "ddp_xpu"
         elif args.strategy == "fsdp":
-            # args.strategy = FSDPStrategy(device="xpu", accelerator=XPUAccelerator())
             print("Applying 'fsdp_xpu' stragey")
             args.strategy = "fsdp_xpu"
         else:
             raise ValueError(f"{args.strategy} is not supported for xpu")
-        # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
-        # args.strategy = strategy
+    else:
+        callback_list.append(callbacks.CPUMetricsCallback())
 
     trainer = L.Trainer(
         accelerator=args.accelerator,
@@ -166,7 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--gradient-clip-val", default=1.0, type=float)
     parser.add_argument("--gradient-clip-algorithm", default="norm", choices=("norm", "value"))
     parser.add_argument("--devices", default=1, type=int)
-    parser.add_argument("--precision", default=16, type=str)
+    parser.add_argument("--precision", default="bf16-mixed", type=str)
     parser.add_argument("--num-nodes", default=1, type=int)
     parser.add_argument("--accelerator", default="auto")
     parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
