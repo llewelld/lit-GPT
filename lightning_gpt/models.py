@@ -57,6 +57,7 @@ class MinGPT(LightningModule):
         self.build_mingpt_configs()
         if not is_overridden("configure_sharded_model", self, LightningModule):
             self.mingpt = mingpt.model.GPT(self.mingpt_config)
+        self._losses: list[float] = []
 
     def build_mingpt_configs(self) -> None:
         params = [
@@ -104,6 +105,7 @@ class MinGPT(LightningModule):
         idx, targets = batch
         _, loss = self(idx, targets)
         self.log("train_loss", loss)
+        self._losses.append(loss)
         return loss
 
     def generate(
