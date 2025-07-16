@@ -19,11 +19,11 @@ try:
     import oneccl_bindings_for_pytorch  # noqa: F401
 
     from intel_backend import XPUAccelerator
+    AcceleratorRegistry.register("xpu", XPUAccelerator)
 except ImportError:
     log.info("'intel_extension_for_pytorch' and/or 'oneccl_bindings_for_pytorch' not installed")
 
 
-AcceleratorRegistry.register("xpu", XPUAccelerator)
 
 LOCAL_SHAKESPEARE_PATH: Path = Path("shakespeare_input.txt")
 
@@ -174,7 +174,6 @@ if __name__ == "__main__":
     parser.add_argument("--devices", default=1, type=int)
     parser.add_argument("--precision", default="bf16-mixed", type=str)
     parser.add_argument("--num-nodes", default=1, type=int)
-    parser.add_argument("--accelerator", default="auto")
     parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
     parser.add_argument("--progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
