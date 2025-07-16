@@ -1,17 +1,21 @@
 from argparse import ArgumentParser, BooleanOptionalAction
 from typing import Union
-from urllib.request import urlopen
 from urllib.error import URLError
 from pathlib import Path
+from urllib.request import urlopen
 
 import lightning as L
 import torch
+from lightning.pytorch.accelerators import AcceleratorRegistry
 from torch.utils.data import DataLoader
 
+from intel_backend import XPUAccelerator, ipex
 from lightning_gpt import callbacks, data, models
 
+AcceleratorRegistry.register("xpu", XPUAccelerator)
 
 LOCAL_SHAKESPEARE_PATH: Path = Path("shakespeare_input.txt")
+
 
 def none_or_str(value: str) -> Union[str, None]:
     if value == "None":
@@ -99,6 +103,26 @@ def main(args):
         torch.set_float32_matmul_precision("high")
         callback_list.append(callbacks.CUDAMetricsCallback())
 
+    if args.accelerator == "xpu":
+        # args.strategy = "single_xpu"
+        # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
+        if torch.xpu.is_available():
+            # torch.set_float32_matmul_precision("high")
+            ipex.set_fp32_math_mode(mode=ipex.FP32MathMode.FP32, device="xpu")
+            torch.set_float32_matmul_precision("high")
+            callback_list.append(callbacks.XPUMetricsCallback())
+        if args.strategy == "ddp":
+            # args.strategy = DDPStrategy(device="xpu", accelerator=XPUAccelerator())
+            args.strategy = "ddp_xpu"
+        elif args.strategy == "fsdp":
+            # args.strategy = FSDPStrategy(device="xpu", accelerator=XPUAccelerator())
+            print("Applying 'fsdp_xpu' stragey")
+            args.strategy = "fsdp_xpu"
+        else:
+            raise ValueError(f"{args.strategy} is not supported for xpu")
+        # args.strategy = SingleDeviceStrategy(device="xpu", accelerator=XPUAccelerator())
+        # args.strategy = strategy
+
     trainer = L.Trainer(
         accelerator=args.accelerator,
         strategy=args.strategy,
@@ -109,7 +133,7 @@ def main(args):
         max_epochs=args.max_epochs,
         gradient_clip_val=args.gradient_clip_val,
         gradient_clip_algorithm=args.gradient_clip_algorithm,
-        enable_progress_bar=args.enable_progress_bar,
+        enable_progress_bar=args.progress_bar,
     )
 
     trainer.fit(model, train_loader)
@@ -142,11 +166,12 @@ if __name__ == "__main__":
     parser.add_argument("--gradient-clip-val", default=1.0, type=float)
     parser.add_argument("--gradient-clip-algorithm", default="norm", choices=("norm", "value"))
     parser.add_argument("--devices", default=1, type=int)
-    parser.add_argument("--precision", default=16, type=int)
+    parser.add_argument("--precision", default=16, type=str)
     parser.add_argument("--num-nodes", default=1, type=int)
-    parser.add_argument("--enable-progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto")
     parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
+    parser.add_argument("--progress-bar", action=BooleanOptionalAction)
+    parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
     args = parser.parse_args()
 
     main(args)
