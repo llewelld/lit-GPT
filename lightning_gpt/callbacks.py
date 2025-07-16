@@ -1,5 +1,6 @@
 import time
 from statistics import mean
+from copy import copy
 
 import torch
 from lightning import LightningModule, Trainer
@@ -50,12 +51,11 @@ class CUDAMetricsCallback(Callback):
         self.start_time = time.time()
         self._epoch_losses: list[list[float]] = []
 
-    def on_train_epoch_end(self, trainer: "Trainer", pl_module: "LightningModule") -> None:
+    def on_train_epoch_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
         self._torch_runner.synchronize(self.root_gpu(trainer))
         max_memory: float = self._torch_runner.max_memory_allocated(self.root_gpu(trainer)) / 2**20
         epoch_time: float = time.time() - self.start_time
-        # losses: list[float] = pl_module._losses
-        self._epoch_losses.append(pl_module._losses)
+        self._epoch_losses.append(copy(pl_module._losses))
         pl_module._losses.clear()
         loss_mean: float = mean(self._epoch_losses[-1])
 

@@ -105,7 +105,7 @@ class MinGPT(LightningModule):
         idx, targets = batch
         _, loss = self(idx, targets)
         self.log("train_loss", loss)
-        self._losses.append(loss)
+        self._losses.append(loss.item())
         return loss
 
     def generate(
