@@ -59,15 +59,18 @@ class CUDAMetricsCallback(Callback):
         pl_module._losses.clear()
         loss_mean: float = mean(self._epoch_losses[-1])
 
+        epoch: int = pl_module.current_epoch
+
         max_memory = trainer.strategy.reduce(max_memory)
         epoch_time = trainer.strategy.reduce(epoch_time)
         loss_mean_means: float = trainer.strategy.reduce(loss_mean)
 
+        rank_zero_info(f"Epoch: {epoch}")
         rank_zero_info(f"Average Epoch time: {epoch_time:.2f} seconds")
         rank_zero_info(f"Average Peak memory {max_memory:.2f}MiB")
         rank_zero_info(f"Loss Mean: {loss_mean_means:.2f}")
 
-    def root_gpu(self, trainer: "Trainer") -> int:
+    def root_gpu(self, trainer: Trainer) -> int:
         return trainer.strategy.root_device.index
 
 
