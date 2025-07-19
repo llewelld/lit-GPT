@@ -1,10 +1,12 @@
+from logging import INFO
+
 import lightning as L
 import pytest
 import torch
 
 import mingpt
 import nanogpt
-from lightning_gpt import models
+from lightning_gpt import callbacks, models
 
 
 def test_mingpt_vs_lightning_mingpt():
@@ -99,6 +101,39 @@ def test_model_instatiation_base_strategy(tmpdir, model_cls):
     mingpt = model_cls(**gpt_config)
     dataloader_train = _get_dummy_data(gpt_config["vocab_size"])
     trainer.fit(mingpt, dataloader_train)
+
+
+@pytest.mark.parametrize(
+    "model_cls",
+    [
+        models.MinGPT,
+        models.FSDPMinGPT,
+    ],
+)
+def test_model_logging(tmpdir, model_cls, caplog):
+    callback_list: list = [callbacks.CPUMetricsCallback()]
+    trainer = L.pytorch.Trainer(
+        limit_train_batches=2,
+        limit_val_batches=2,
+        max_epochs=1,
+        logger=True,
+        enable_checkpointing=False,
+        default_root_dir=tmpdir,
+        callbacks=callback_list,
+        enable_progress_bar=False,
+    )
+    gpt_config = _get_minimal_gpt_config()
+
+    # if "deepspeed" in model_cls.__qualname__.lower():
+    #     gpt_config.update(fused_adam=False, offload=False)
+    mingpt = model_cls(**gpt_config)
+    dataloader_train = _get_dummy_data(gpt_config["vocab_size"])
+    with caplog.at_level(INFO):
+        trainer.fit(mingpt, dataloader_train)
+    assert "Epoch:" in caplog.text
+    assert "Average Epoch time:" in caplog.text
+    assert "Average Peak memory: nan" in caplog.text
+    assert "Loss Mean:" in caplog.text
 
 
 @pytest.mark.parametrize("model_cls", [models.DeepSpeedMinGPT, models.DeepSpeedNanoGPT])
