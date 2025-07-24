@@ -176,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-nodes", default=1, type=int)
     parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
     parser.add_argument("--progress-bar", action=BooleanOptionalAction)
-    parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
+    parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu", "cuda"))
     args = parser.parse_args()
 
     main(args)
