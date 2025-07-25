@@ -175,6 +175,14 @@ class DDPXPUStrategy(DDPStrategy):
         else:
             raise ValueError("Only 'cuda' and 'xpu' are supported")
 
+    @classmethod
+    def register_strategies(cls, strategy_registry) -> None:
+        strategy_registry.register(
+            cls.strategy_name,
+            cls,
+            description=f"{cls.__class__.__name__} - uses a single XPU tile for compute.",
+        )
+
 
 class FSDPXPUStrategy(FSDPStrategy):
 
@@ -209,6 +217,14 @@ class FSDPXPUStrategy(FSDPStrategy):
             from torch.distributed.device_mesh import init_device_mesh
 
             self.kwargs["device_mesh"] = init_device_mesh("xpu", self.kwargs["device_mesh"])
+
+    @classmethod
+    def register_strategies(cls, strategy_registry) -> None:
+        strategy_registry.register(
+            cls.strategy_name,
+            cls,
+            description=f"{cls.__class__.__name__} - uses a single XPU tile for compute.",
+        )
 
     # @override
     # def _setup_model(self, model: Module) -> DistributedDataParallel:
@@ -293,11 +309,11 @@ StrategyRegistry.register(
 StrategyRegistry.register(
     "ddp_xpu",
     DDPXPUStrategy,
-    description="XPU ddp utilizing a multiple Intel or CUDA GPU device or tile.",
+    description="XPU ddp utilizing a multiple Intel GPU device or tile.",
 )
 
 StrategyRegistry.register(
     "fsdp_xpu",
     FSDPXPUStrategy,
-    description="XPU fsdp utilizing a multiple Intel or CUDA GPU device or tile.",
+    description="XPU fsdp utilizing a multiple Intel GPU device or tile.",
 )
