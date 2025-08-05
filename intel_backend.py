@@ -29,13 +29,6 @@ default_pg_timeout = timedelta(seconds=1800)
 
 log = getLogger(__file__)
 
-# try:
-#     import intel_extension_for_pytorch as ipex
-#     import oneccl_bindings_for_pytorch
-# except ModuleNotFoundError:
-#     log.debug("'intel_extension_for_pytorch' and/or 'oneccl_bindings_for_pytorch' not installed")
-#
-
 
 class XPUAccelerator(Accelerator):
     """Implements a Lightning Accelerator class for Intel GPU usage.
@@ -139,7 +132,8 @@ class DDPXPUStrategy(DDPStrategy):
             # accelerator=XPUAccelerator(),
             # checkpoint_io=checkpoint_io,
             # precision_plugin=precision_plugin,
-            process_group_backend="ccl",
+            # process_group_backend="ccl",
+            process_group_backend="xccl",
             **kwargs,
         )
         # super(process_group_backend="ccl", **kwargs)
@@ -149,21 +143,21 @@ class DDPXPUStrategy(DDPStrategy):
         """Wraps the model into a `DistributedDataParallel` module."""
         device_ids = self.determine_ddp_device_ids()
         log.debug(f"setting up DDP model with device ids: {device_ids}, kwargs: {self._ddp_kwargs}")
-        if self.root_device.type == "xpu":
-            # https://pytorch.org/docs/stable/notes/cuda.html#id5
-            ctx = torch.xpu.stream(torch.xpu.Stream()) if device_ids is not None else nullcontext()
+        # if self.root_device.type == "xpu":
+        # https://pytorch.org/docs/stable/notes/cuda.html#id5
+        ctx = torch.xpu.stream(torch.xpu.Stream()) if device_ids is not None else nullcontext()
         # elif self.root_device.type == "cuda":
         #     ctx = torch.cuda.stream(torch.cuda.Stream()) if device_ids is not None else nullcontext()
-        else:
-            raise ValueError("Only 'xpu' are supported")
+        # else:
+        #     raise ValueError("Only 'xpu' are supported")
         with ctx:
             return DistributedDataParallel(module=model, device_ids=device_ids, **self._ddp_kwargs)
 
     def _register_ddp_hooks(self) -> None:
         log.debug(f"{self.__class__.__name__}: registering ddp hooks")
         # currently, DDP communication hooks only work with NCCL backend and SPSD (single process single device) mode
+        # NOTE: Unclear if the CCL intel backend is similar enough to NCCL
         # https://github.com/pytorch/pytorch/blob/v1.8.0/torch/nn/parallel/distributed.py#L1080-L1084
-        # if self.root_device.type in ("cuda", "xpu"):
         if self.root_device.type == "xpu":
             assert isinstance(self.model, DistributedDataParallel)
             _register_ddp_comm_hook(
@@ -173,27 +167,21 @@ class DDPXPUStrategy(DDPStrategy):
                 ddp_comm_wrapper=self._ddp_comm_wrapper,
             )
         else:
-            raise ValueError("Only 'cuda' and 'xpu' are supported")
+            raise ValueError("Only 'xpu' is supported")
 
 
 class FSDPXPUStrategy(FSDPStrategy):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(
-            # device=device,
-            # accelerator=XPUAccelerator(),
-            # checkpoint_io=checkpoint_io,
-            # precision_plugin=precision_plugin,
-            process_group_backend="ccl",
+            # process_group_backend="ccl",
+            process_group_backend="xccl",
             **kwargs,
         )
-        print("Using FSDPXPUStrategy!")
-        # super(process_group_backend="ccl", **kwargs)
 
     @override
     def setup_environment(self) -> None:
         super().setup_environment()
-        log.warning("USING FSDP XPU")
         log.debug(f"{self.__class__.__name__}: setting up distributed...")
         reset_seed()
 
@@ -224,23 +212,6 @@ class FSDPXPUStrategy(FSDPStrategy):
     #        raise ValueError("Only 'xpu' are supported")
     #     with ctx:
     #         return DistributedDataParallel(module=model, device_ids=device_ids, **self._ddp_kwargs)
-    #
-    #
-    # def _register_ddp_hooks(self) -> None:
-    #     log.debug(f"{self.__class__.__name__}: registering fsdp hooks")
-    #     # currently, DDP communication hooks only work with NCCL backend and SPSD (single process single device) mode
-    #     # https://github.com/pytorch/pytorch/blob/v1.8.0/torch/nn/parallel/distributed.py#L1080-L1084
-    #     # if self.root_device.type in ("cuda", "xpu"):
-    #     if self.root_device.type == "xpu":
-    #         assert isinstance(self.model, DistributedDataParallel)
-    #         _register_ddp_comm_hook(
-    #             model=self.model,
-    #             ddp_comm_state=self._ddp_comm_state,
-    #             ddp_comm_hook=self._ddp_comm_hook,
-    #             ddp_comm_wrapper=self._ddp_comm_wrapper,
-    #         )
-    #     else:
-    #         raise ValueError("Only 'cuda' and 'xpu' are supported")
 
 
 class SingleXPUStrategy(SingleDeviceStrategy):
@@ -260,20 +231,6 @@ class SingleXPUStrategy(SingleDeviceStrategy):
             checkpoint_io=checkpoint_io,
             precision_plugin=precision_plugin,
         )
-
-    # @property
-    # def is_distributed(self) -> bool:
-    #     return False
-
-    # def setup(self, trainer) -> None:
-    #     self.model_to_device()
-    #     super().setup(trainer)
-
-    # def setup_optimizers(self, trainer) -> None:
-    #     super().setup_optimizers(trainer)
-
-    # def model_to_device(self) -> None:
-    #     self.model.to(self.root_device)
 
     @classmethod
     def register_strategies(cls, strategy_registry) -> None:
