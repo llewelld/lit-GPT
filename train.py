@@ -2,10 +2,11 @@
 Trainer for gpt2 benchmarking.
 
 Notes:
-    - Check the `MASTER_ADDR` and `MASTER_PORT` variables are set correctly
-    - They may need to be set prior to certain imports (especialy `lightning`)
-    - Also be aware they are set in `bin/dawn.bash`
-    - Consider importing the `MASTER_ADDR` and `MASTER_PORT` from env
+    - Following may no lonoger apply since MPIEnvironment is used
+        - Check the `MASTER_ADDR` and `MASTER_PORT` variables are set correctly
+        - They may need to be set prior to certain imports (especialy `lightning`)
+        - Also be aware they are set in `bin/dawn.bash`
+        - Consider importing the `MASTER_ADDR` and `MASTER_PORT` from env
 """
 from argparse import ArgumentParser, BooleanOptionalAction
 from logging import getLogger
@@ -15,45 +16,12 @@ from pathlib import Path
 from urllib.request import urlopen
 import os
 
-def xpu_setup_environment(composite: bool = False):
-    # MPI_LOCALRANKID
-    # Local sequential index of the process on the node
-    # See nowhere
-    local_rank = int(os.environ["MPI_LOCALRANKID"])
-
-    # PMI_RANK
-    # The rank of this process within the program (zero-origin)
-    # See https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_13.html#environment
-    # See https://github.com/intel/torch-ccl?tab=readme-ov-file#usage
-    global_rank = int(os.environ["PMI_RANK"])
-
-    # PMI_SIZE
-    # The size of the program (number of ranks)
-    # See https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_13.html#environment
-    # See https://github.com/intel/torch-ccl?tab=readme-ov-file#usage
-    world_size = int(os.environ["PMI_SIZE"])
-
-    os.environ["RANK"] = str(global_rank)
-    os.environ["WORLD_SIZE"] = str(world_size)
-
-    # ZE_FLAT_DEVICE_HIERARCHY
-    # Hierarchy model with which the underlying hardware is exposed
-    # ZE_AFFINITY_MASK
-    # Restrict which devices are visible to the process
-    # See https://spec.oneapi.io/level-zero/latest/core/PROG.html#environment-variables
-    # See https://www.intel.com/content/www/us/en/developer/articles/technical/flattening-gpu-tile-hierarchy.html
-    if composite:
-        os.environ["ZE_FLAT_DEVICE_HIERARCHY"] = "COMPOSITE"
-    else:
-        os.environ["ZE_FLAT_DEVICE_HIERARCHY"] = "FLAT"
-    os.environ["ZE_AFFINITY_MASK"] = str(local_rank // 2) + "." + str(local_rank % 2)
-
-# # # xpu_setup_environment()
-
 import lightning as L
 import torch
+from lightning.pytorch.plugins import Precision, LayerSync
+from lightning.pytorch.plugins.io import CheckpointIO
 from lightning.pytorch.plugins.environments import (
-    TorchElasticEnvironment, LightningEnvironment,  SLURMEnvironment, MPIEnvironment
+    TorchElasticEnvironment, LightningEnvironment,  SLURMEnvironment, MPIEnvironment, ClusterEnvironment
 )
 from lightning.pytorch.accelerators import AcceleratorRegistry
 from torch.utils.data import DataLoader
@@ -63,14 +31,10 @@ from lightning_gpt import callbacks, data, models
 log = getLogger(__file__)
 
 try:
-    # import intel_extension_for_pytorch as ipex
-    # import oneccl_bindings_for_pytorch  # noqa: F401
-
     from intel_backend import XPUAccelerator
     AcceleratorRegistry.register("xpu", XPUAccelerator)
 except ImportError:
     log.info("Torch 2.8.0+xpu required to use XPUAccelerator")
-
 
 
 LOCAL_SHAKESPEARE_PATH: Path = Path("shakespeare_input.txt")
@@ -157,54 +121,20 @@ def main(args):
             )
         model = torch.compile(model)
 
-    callback_list = []
-    trainer_plugins = []
+    callbacks_list: list[callbacks.Callback] = []
+    trainer_plugins: list[Union[Precision, ClusterEnvironment, CheckpointIO, LayerSync]] = []
 
     if torch.cuda.is_available():
         torch.set_float32_matmul_precision("high")
-        callback_list.append(callbacks.CUDAMetricsCallback())
+        callbacks_list.append(callbacks.CUDAMetricsCallback())
     elif args.accelerator == "xpu":
-        # # Sourced from
-        # # https://github.com/alan-turing-institute/aurora-hpc/blob/f9365754c75ebcc82f19b70c294ee0af2f6cd707/train/scripts/train.py#L59
-
-        # # PMI_SIZE set by mpirun
-        # import os
-        # import re
-        # WORLD_SIZE = int(os.environ["PMI_SIZE"])
-        # os.environ["WORLD_SIZE"] = str(WORLD_SIZE)
-
-        # # # PMI_RANK set by mpirun
-        # RANK = os.environ["PMI_RANK"]
-        # os.environ["RANK"] = RANK
-
-        # # # MPI_LOCALRANKID provenance unknown
-        # LOCAL_RANK = int(os.environ["MPI_LOCALRANKID"])
-        # print(f"LOCAL_RANK: {LOCAL_RANK}")
-
-        # # # get the master address
-        # numbers = re.compile("\d+")
-        # nodelist_env = os.getenv("SLURM_JOB_NODELIST")
-
-        # # e.g. "pvc-s-[24-25]"
-        # try:
-        #     # If we're running on >1 node, we should set the MASTER_ADDR
-        #     # to the hostname of rank 0.
-        #     prefix = nodelist_env[0 : nodelist_env.index("[")]
-        #     nodelist = tuple(prefix + x for x in numbers.findall(nodelist_env))
-        #     master_addr = nodelist[0]
-        # except ValueError:
-        #     # We must be running on a single node.
-        #     master_addr = "0.0.0.0"
-
-        # os.environ["MASTER_ADDR"] = master_addr
-        # os.environ["MASTER_PORT"] = "29876"
-        # # End copied section
         trainer_plugins.append(MPIEnvironment())
         if torch.xpu.is_available():
+            # Commented lines below were used with lighting < 2
             # torch.set_float32_matmul_precision("high")
             # ipex.set_fp32_math_mode(mode=ipex.FP32MathMode.FP32, device="xpu")
             torch.set_float32_matmul_precision("high")
-            callback_list.append(callbacks.XPUMetricsCallback())
+            callbacks_list.append(callbacks.XPUMetricsCallback())
         if args.strategy == "ddp":
             args.strategy = "ddp_xpu"
         elif args.strategy == "fsdp":
@@ -213,7 +143,7 @@ def main(args):
         else:
             raise ValueError(f"{args.strategy} is not supported for xpu")
     else:
-        callback_list.append(callbacks.CPUMetricsCallback())
+        callbacks_list.append(callbacks.CPUMetricsCallback())
 
     trainer = L.Trainer(
         accelerator=args.accelerator,
@@ -221,13 +151,11 @@ def main(args):
         devices=args.devices,
         num_nodes=args.num_nodes,
         precision=args.precision,
-        callbacks=callback_list,
+        callbacks=callbacks_list,
         max_epochs=args.max_epochs,
         gradient_clip_val=args.gradient_clip_val,
         gradient_clip_algorithm=args.gradient_clip_algorithm,
         enable_progress_bar=args.progress_bar,
-        # plugins=TorchElasticEnvironment(),
-        # plugins=MPIEnvironment(),
         plugins=trainer_plugins,
     )
 
@@ -244,7 +172,6 @@ if __name__ == "__main__":
     L.seed_everything(42)
 
     parser = ArgumentParser()
-    # parser = L.Trainer.add_argparse_args(parser)
 
     parser.add_argument("--model-type", default="gpt2", type=none_or_str)
     parser.add_argument("--n-layer", type=int)
