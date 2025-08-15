@@ -128,6 +128,7 @@ def main(args):
         torch.set_float32_matmul_precision("high")
         callbacks_list.append(callbacks.CUDAMetricsCallback())
     elif args.accelerator == "xpu":
+        # MPI: https://lightning.ai/docs/pytorch/stable/_modules/lightning/fabric/plugins/environments/mpi.html#MPIEnvironment 
         trainer_plugins.append(MPIEnvironment())
         if torch.xpu.is_available():
             # Commented lines below were used with lighting < 2
