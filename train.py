@@ -158,13 +158,25 @@ def main(args):
         gradient_clip_algorithm=args.gradient_clip_algorithm,
         enable_progress_bar=args.progress_bar,
         plugins=trainer_plugins,
+        enable_checkpointing=args.enable_checkpointing,
     )
 
     trainer.fit(model, train_loader)
 
-    context = "Friends of my soul"  # Prime with something
-    x = train_dataset.to_tokens(context, model.device)
-    y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+    context: str = "Friends of my soul"  # Prime with something
+    x: torch.Tensor = train_dataset.to_tokens(context, model.device)
+    print(type(x))
+    print(x)
+    print(model)
+    y: tuple[torch.Tensor, torch.Tensor]
+    # import pdb; pdb.set_trace()
+    if args.accelerator == "xpu":
+        # https://github.com/pytorch/pytorch/issues/124019#issuecomment-2347670770
+        # y = model.generate(torch.flatten(x), max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+        with torch.distributed.fsdp.FullyShardedDataParallel.summon_full_params(model):
+            y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10, synced_gpus=True)
+    else:
+        y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
     # y is a list of length 1. That sole element is a tensor, hence y[0].
     print(train_dataset.from_tokens(y[0]))
 
@@ -194,6 +206,7 @@ if __name__ == "__main__":
     parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
     parser.add_argument("--progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
+    parser.add_argument("--enable-checkpointing",  action=BooleanOptionalAction)
     args = parser.parse_args()
 
     main(args)
