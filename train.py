@@ -165,18 +165,7 @@ def main(args):
 
     context: str = "Friends of my soul"  # Prime with something
     x: torch.Tensor = train_dataset.to_tokens(context, model.device)
-    print(type(x))
-    print(x)
-    print(model)
-    y: tuple[torch.Tensor, torch.Tensor]
-    # import pdb; pdb.set_trace()
-    if args.accelerator == "xpu":
-        # https://github.com/pytorch/pytorch/issues/124019#issuecomment-2347670770
-        # y = model.generate(torch.flatten(x), max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
-        with torch.distributed.fsdp.FullyShardedDataParallel.summon_full_params(model):
-            y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10, synced_gpus=True)
-    else:
-        y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+    y: list[torch.Tensor] = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
     # y is a list of length 1. That sole element is a tensor, hence y[0].
     print(train_dataset.from_tokens(y[0]))
 
