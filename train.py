@@ -99,6 +99,8 @@ def main(args):
             GPT_class = models.FSDPNanoGPT
         else:
             raise ValueError(f"Implementation {args.implementation} not supported with FSDP")
+        # See https://docs.pytorch.org/docs/stable/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.summon_full_params
+        # extra_kwargs['use_orig_params'] = True
 
     model = GPT_class(
         vocab_size=train_dataset.vocab_size,
@@ -165,7 +167,15 @@ def main(args):
 
     context: str = "Friends of my soul"  # Prime with something
     x: torch.Tensor = train_dataset.to_tokens(context, model.device)
-    y: list[torch.Tensor] = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+    y: list[torch.Tensor] 
+    y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+
+    # if args.strategy == 'fsdp':
+    #     with torch.distributed.fsdp.FullyShardedDataParallel.summon_full_params(model, with_grads=True, offload_to_cpu=False):
+    #         y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+    # else:
+    #     y = model.generate(x, max_new_tokens=1000, temperature=1.0, do_sample=True, top_k=10)
+
     # y is a list of length 1. That sole element is a tensor, hence y[0].
     print(train_dataset.from_tokens(y[0]))
 
@@ -194,7 +204,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-nodes", default=1, type=int)
     parser.add_argument("--local-shakespeare-path", default=LOCAL_SHAKESPEARE_PATH, type=Path)
     parser.add_argument("--progress-bar", action=BooleanOptionalAction)
-    parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
+    parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu", "cuda"))
     parser.add_argument("--enable-checkpointing",  action=BooleanOptionalAction)
     args = parser.parse_args()
 
