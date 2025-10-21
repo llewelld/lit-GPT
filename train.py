@@ -9,6 +9,7 @@ Notes:
 """
 
 from argparse import ArgumentParser, BooleanOptionalAction
+from contextlib import nullcontext
 from logging import getLogger
 from pathlib import Path
 from typing import Union
@@ -128,10 +129,14 @@ def main(args):
 
     callbacks_list: list[callbacks.Callback] = []
     trainer_plugins: list[Union[Precision, ClusterEnvironment, CheckpointIO, LayerSync]] = []
+    profile_activities: list[torch.profiler.ProfilerActivity] = [
+        torch.profiler.ProfilerActivity.CPU,
+    ]
 
     if torch.cuda.is_available():
         torch.set_float32_matmul_precision("high")
         callbacks_list.append(callbacks.CUDAMetricsCallback())
+        profile_activities.append(torch.profiler.ProfilerActivity.CUDA)
     elif args.accelerator == "xpu":
         # MPI: https://lightning.ai/docs/pytorch/stable/
         # _modules/lightning/fabric/plugins/environments/mpi.html#MPIEnvironment
@@ -142,6 +147,7 @@ def main(args):
             # ipex.set_fp32_math_mode(mode=ipex.FP32MathMode.FP32, device="xpu")
             torch.set_float32_matmul_precision("high")
             callbacks_list.append(callbacks.XPUMetricsCallback())
+            profile_activities.append(torch.profiler.ProfilerActivity.XPU)
         if args.strategy == "ddp":
             args.strategy = "ddp_xpu"
         elif args.strategy == "fsdp":
@@ -167,7 +173,8 @@ def main(args):
         enable_checkpointing=args.enable_checkpointing,
     )
 
-    trainer.fit(model, train_loader)
+    with torch.profiler.profile(activities=profile_activities) if args.profile else nullcontext() as prof:
+        trainer.fit(model, train_loader)
 
     context: str = "Friends of my soul"  # Prime with something
     x: torch.Tensor = train_dataset.to_tokens(context, model.device)
@@ -183,6 +190,9 @@ def main(args):
 
     # y is a list of length 1. That sole element is a tensor, hence y[0].
     print(train_dataset.from_tokens(y[0]))
+    if args.profile:
+        print(prof.key_averages().table(row_limit=10))
+        prof.export_chrome_trace("trace.json")
 
 
 if __name__ == "__main__":
@@ -211,6 +221,7 @@ if __name__ == "__main__":
     parser.add_argument("--progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu", "cuda"))
     parser.add_argument("--enable-checkpointing", action=BooleanOptionalAction)
+    parser.add_argument("--profile", action=BooleanOptionalAction)
     args = parser.parse_args()
 
     main(args)
