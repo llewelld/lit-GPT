@@ -129,7 +129,12 @@ def main(args):
         callbacks_list.append(callbacks.CUDAMetricsCallback())
     elif args.accelerator == "xpu":
         # MPI: https://lightning.ai/docs/pytorch/stable/_modules/lightning/fabric/plugins/environments/mpi.html#MPIEnvironment 
-        trainer_plugins.append(MPIEnvironment())
+        if args.xpu_mpi_environment:
+            print('Using MPIEnvironment')
+            trainer_plugins.append(MPIEnvironment())
+        else:
+            print('Using srun with default LightningEnvironment')
+            trainer_plugins.append(SLURMEnvironment())
         if torch.xpu.is_available():
             # Commented lines below were used with lighting < 2
             # torch.set_float32_matmul_precision("high")
@@ -196,6 +201,7 @@ if __name__ == "__main__":
     parser.add_argument("--progress-bar", action=BooleanOptionalAction)
     parser.add_argument("--accelerator", default="auto", choices=("auto", "cpu", "xpu"))
     parser.add_argument("--enable-checkpointing",  action=BooleanOptionalAction)
+    parser.add_argument("--xpu-mpi-environment",  action=BooleanOptionalAction, default=False)
     args = parser.parse_args()
 
     main(args)
