@@ -25,6 +25,7 @@ from lightning.pytorch.plugins.environments import (
     MPIEnvironment,
 )
 from lightning.pytorch.plugins.io import CheckpointIO
+from lightning.pytorch.profilers import AdvancedProfiler, SimpleProfiler, PyTorchProfiler
 from torch.utils.data import DataLoader
 
 from lightning_gpt import callbacks, data, models
@@ -171,10 +172,27 @@ def main(args):
         enable_progress_bar=args.progress_bar,
         plugins=trainer_plugins,
         enable_checkpointing=args.enable_checkpointing,
+        # profiler="simple",
     )
+    if args.profile:
+        # profiler: AdvancedProfiler = AdvancedProfiler()
+        # profiler: AdvancedProfiler = SimpleProfiler(filename="profiler", extended=True)
+        profile_file_name: str = "pytorch_prof"
+        profile_folder: str = "profiling/"
+        print(f"Running profiler. Saving results to '{Path(profile_folder)/profile_file_name}'")
+        profiler: PyTorchProfiler = PyTorchProfiler(
+                dirpath=profile_folder,
+                filename=profile_file_name, 
+                emit_nvtx=True)
+        trainer.profiler = profiler
 
-    with torch.profiler.profile(activities=profile_activities) if args.profile else nullcontext() as prof:
-        trainer.fit(model, train_loader)
+    trainer.fit(model, train_loader)
+
+
+    # if args.profile:
+    #     print("Preparing to print profile table...")
+    #     print(prof.key_averages().table(row_limit=10))
+    #     prof.export_chrome_trace("trace.json")
 
     context: str = "Friends of my soul"  # Prime with something
     x: torch.Tensor = train_dataset.to_tokens(context, model.device)
@@ -190,9 +208,10 @@ def main(args):
 
     # y is a list of length 1. That sole element is a tensor, hence y[0].
     print(train_dataset.from_tokens(y[0]))
-    if args.profile:
-        print(prof.key_averages().table(row_limit=10))
-        prof.export_chrome_trace("trace.json")
+
+    # if args.profile:
+    #     print(prof.key_averages().table(row_limit=10))
+    #     prof.export_chrome_trace("trace.json")
 
 
 if __name__ == "__main__":
